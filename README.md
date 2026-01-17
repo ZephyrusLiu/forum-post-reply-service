@@ -1,2 +1,1 @@
-# GroupProject-Posts
-GroupProject-Posts
+# forum-post-reply-service
