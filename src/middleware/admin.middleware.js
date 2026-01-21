@@ -1,5 +1,7 @@
 module.exports = function admin(req, res, next) {
-  if (!req.user) return res.status(401).json({ error: "Unauthorized" });
+  if (!req.user) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
 
   const role = req.user.role;
   if (role !== "ADMIN" && role !== "SUPER_ADMIN") {

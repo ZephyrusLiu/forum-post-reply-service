@@ -1,6 +1,8 @@
 const express = require("express");
+
 const postRoutes = require("./routes/post.routes");
 const replyRoutes = require("./routes/reply.routes");
+const userRoutes = require("./routes/user.routes"); // ✅ user management
 const errorHandler = require("./middleware/error.middleware");
 
 const app = express();
@@ -16,11 +18,16 @@ app.get("/health", (req, res) => {
   });
 });
 
-// Routes
-app.use(postRoutes);
-app.use(replyRoutes);
+// =====================
+// API Routes
+// =====================
+app.use("/api", postRoutes);
+app.use("/api", replyRoutes);
+app.use("/api", userRoutes);
 
-// 404 handler (for unknown routes)
+// =====================
+// 404 handler
+// =====================
 app.use((req, res) => {
   res.status(404).json({
     error: "NOT_FOUND",
@@ -28,7 +35,9 @@ app.use((req, res) => {
   });
 });
 
+// =====================
 // Global error handler (MUST be last)
+// =====================
 app.use(errorHandler);
 
 module.exports = app;
