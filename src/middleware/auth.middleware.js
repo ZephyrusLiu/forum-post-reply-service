@@ -1,4 +1,3 @@
-// auth middleware
 const jwt = require("jsonwebtoken");
 
 module.exports = function auth(req, res, next) {
@@ -15,9 +14,8 @@ module.exports = function auth(req, res, next) {
 
     req.user = {
       id: decoded.userId,
-      role: decoded.role,                 // USER | ADMIN | SUPER_ADMIN
-      isEmailVerified: !!decoded.isEmailVerified,
-      isBanned: !!decoded.isBanned,
+      type: decoded.type,     // user | admin | super
+      status: decoded.status, // unverified | active | banned
     };
 
     next();

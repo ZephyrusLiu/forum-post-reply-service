@@ -24,8 +24,8 @@ function ensureCanCreateReply(post) {
 }
 
 function isAdmin(user) {
-  const role = user?.role;
-  return role === "ADMIN" || role === "SUPER_ADMIN";
+  const type = user?.type; // ✅ role -> type
+  return type === "admin" || type === "super";
 }
 
 function ensureReplyOwnerOrAdmin(replyUserId, user) {
@@ -43,7 +43,7 @@ async function ensureCanDeleteReply(reply, user) {
   // reply owner can delete
   if (reply.userId && reply.userId.equals(user.id)) return;
 
-  // admin/super admin can delete (bonus)
+  // admin/super can delete (bonus)
   if (isAdmin(user)) return;
 
   // post owner can delete others' replies (bonus)
@@ -64,9 +64,14 @@ exports.createReply = async (postId, user, comment) => {
   if (!comment || typeof comment !== "string" || comment.trim().length === 0) {
     throw new BadRequestError("Comment is required");
   }
+
   if (!user || !user.id) {
     throw new ForbiddenError("Forbidden");
   }
+
+  // optional safety (middleware should already block banned/unverified)
+  if (user.status === "banned") throw new ForbiddenError("Forbidden");
+  if (user.status !== "active") throw new ForbiddenError("Forbidden");
 
   const post = await postRepo.findById(postId);
   ensureCanCreateReply(post);
@@ -92,7 +97,7 @@ exports.getReplies = async (postId) => {
 
 /**
  * Update reply
- * - Only reply owner (and optionally admin)
+ * - Only reply owner (and optionally admin/super)
  * - If reply inactive => not found
  */
 exports.updateReply = async (replyId, user, comment) => {
@@ -100,11 +105,13 @@ exports.updateReply = async (replyId, user, comment) => {
     throw new BadRequestError("Comment is required");
   }
 
+  if (!user || !user.id) throw new ForbiddenError("Forbidden");
+  if (user.status === "banned") throw new ForbiddenError("Forbidden");
+  if (user.status !== "active") throw new ForbiddenError("Forbidden");
+
   const reply = await replyRepo.findById(replyId);
   if (!reply || reply.isActive === false) throw new NotFoundError("Reply not found");
 
-  // If you want ONLY reply owner (strict), replace this with:
-  // if (!reply.userId.equals(user.id)) throw new ForbiddenError("Forbidden");
   ensureReplyOwnerOrAdmin(reply.userId, user);
 
   return replyRepo.update(replyId, { comment: comment.trim() });
@@ -112,10 +119,14 @@ exports.updateReply = async (replyId, user, comment) => {
 
 /**
  * Delete reply (soft delete)
- * - Reply owner OR ADMIN/SUPER_ADMIN OR Post owner (bonus)
+ * - Reply owner OR admin/super OR Post owner (bonus)
  * - If reply inactive => not found
  */
 exports.deleteReply = async (replyId, user) => {
+  if (!user || !user.id) throw new ForbiddenError("Forbidden");
+  if (user.status === "banned") throw new ForbiddenError("Forbidden");
+  if (user.status !== "active") throw new ForbiddenError("Forbidden");
+
   const reply = await replyRepo.findById(replyId);
   if (!reply || reply.isActive === false) throw new NotFoundError("Reply not found");
 

@@ -1,8 +1,6 @@
-// src/middlewares/requireNotBanned.js
-const { ForbiddenError } = require("../errors/httpErrors");
-
-module.exports = function requireNotBanned(req, _res, next) {
-  if (req.user?.isBanned) return next(new ForbiddenError("Forbidden"));
+module.exports = (req, res, next) => {
+  if (req.user?.status === "banned") {
+    return res.status(403).json({ message: "Forbidden" });
+  }
   next();
 };
-

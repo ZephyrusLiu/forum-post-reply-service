@@ -1,10 +1,19 @@
 // src/middleware/superAdmin.middleware.js
 module.exports = function superAdmin(req, res, next) {
-  if (!req.user) {
+  const user = req.user;
+
+  // must be authenticated
+  if (!user) {
     return res.status(401).json({ error: "Unauthorized" });
   }
 
-  if (req.user.role !== "SUPER_ADMIN") {
+  // banned users are never allowed
+  if (user.status === "banned") {
+    return res.status(403).json({ error: "Forbidden" });
+  }
+
+  // only super admins
+  if (user.type !== "super") {
     return res.status(403).json({ error: "Forbidden" });
   }
 
