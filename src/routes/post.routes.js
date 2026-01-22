@@ -38,6 +38,12 @@ const c = require("../controllers/post.controller");
 router.get("/posts", auth, requireNotBanned, c.getPosts);
 router.get("/posts/:postId", auth, requireNotBanned, c.getPost);
 
+// Top posts by replies (current user)
+router.get("/me/posts/top", auth, requireNotBanned, c.getMyTopPosts);
+
+// Drafts (current user)
+router.get("/me/posts/drafts", auth, requireNotBanned, c.getMyDrafts);
+
 /* =====================
    CREATE / UPDATE / DELETE (Owner actions)
    - Logged in
