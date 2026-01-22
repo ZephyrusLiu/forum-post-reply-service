@@ -3,7 +3,7 @@ const router = require("express").Router();
 const auth = require("../middleware/auth.middleware");
 const admin = require("../middleware/admin.middleware");
 const requireNotBanned = require("../middleware/requireNotBanned.middleware");
-const requireVerifiedOrAdmin = require("../middleware/requireVerifiedOrAdmin.middleware");
+const requireEmailVerified = require("../middleware/requireEmailVerified.middleware");
 const c = require("../controllers/post.controller");
 
 /**
@@ -44,22 +44,22 @@ router.get("/posts/:postId", auth, requireNotBanned, c.getPost);
    - Not banned
    - Email verified OR Admin/SuperAdmin
    ===================== */
-router.post("/posts", auth, requireNotBanned, requireVerifiedOrAdmin, c.createPost);
+router.post("/posts", auth, requireNotBanned, requireEmailVerified, c.createPost);
 
-router.patch("/posts/:postId", auth, requireNotBanned, requireVerifiedOrAdmin, c.updatePost);
+router.patch("/posts/:postId", auth, requireNotBanned, requireEmailVerified, c.updatePost);
 
-router.delete("/posts/:postId", auth, requireNotBanned, requireVerifiedOrAdmin, c.deletePost);
+router.delete("/posts/:postId", auth, requireNotBanned, requireEmailVerified, c.deletePost);
 
 /* =====================
    OWNER STATE CHANGES
    - Email verified OR Admin/SuperAdmin
    - Service should still enforce owner for these actions
    ===================== */
-router.post("/posts/:postId/publish", auth, requireNotBanned, requireVerifiedOrAdmin, c.publishPost);
-router.post("/posts/:postId/hide", auth, requireNotBanned, requireVerifiedOrAdmin, c.hidePost);
-router.post("/posts/:postId/unhide", auth, requireNotBanned, requireVerifiedOrAdmin, c.unhidePost);
-router.post("/posts/:postId/archive", auth, requireNotBanned, requireVerifiedOrAdmin, c.archivePost);
-router.post("/posts/:postId/unarchive", auth, requireNotBanned, requireVerifiedOrAdmin, c.unarchivePost);
+router.post("/posts/:postId/publish", auth, requireNotBanned, requireEmailVerified, c.publishPost);
+router.post("/posts/:postId/hide", auth, requireNotBanned, requireEmailVerified, c.hidePost);
+router.post("/posts/:postId/unhide", auth, requireNotBanned, requireEmailVerified, c.unhidePost);
+router.post("/posts/:postId/archive", auth, requireNotBanned, requireEmailVerified, c.archivePost);
+router.post("/posts/:postId/unarchive", auth, requireNotBanned, requireEmailVerified, c.unarchivePost);
 
 /* =====================
    ADMIN / SUPER ADMIN

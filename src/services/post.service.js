@@ -20,15 +20,15 @@ function ensureOwner(post, userId) {
 }
 
 function ensureAdmin(user) {
-  const role = user?.role;
-  if (role !== "ADMIN" && role !== "SUPER_ADMIN") {
+  const type = user?.type; // ✅ role -> type
+  if (type !== "admin" && type !== "super") {
     throw new ForbiddenError("Admin only");
   }
 }
 
 function toId(user) {
-  // support {id} or {_id}
-  return user?.id || user?._id;
+  // ✅ auth contract: user.id
+  return user?.id;
 }
 
 /**
@@ -53,64 +53,33 @@ exports.createDraft = async (userId, data) => {
   return postRepo.create(payload);
 };
 
-/**
- * Public feed (PUBLISHED only) — keep if you still have public mode somewhere
- */
-exports.getPublicPosts = async () => {
-  return postRepo.findPublic();
-};
+exports.getPublicPosts = async () => postRepo.findPublic();
 
-/**
- * Public single post (PUBLISHED only)
- */
 exports.getPostForPublic = async (postId) => {
   const post = await postRepo.findById(postId);
   if (!post || post.stage !== "PUBLISHED") return null;
   return post;
 };
 
-/**
- * Strict mode: logged-in users can view only PUBLISHED posts
- * - Unverified users are allowed to view
- * - Banned is blocked at middleware
- */
-exports.getPostsForUser = async () => {
-  return postRepo.findPublic();
-};
+exports.getPostsForUser = async () => postRepo.findPublic();
 
-/**
- * Strict mode: logged-in users can view a PUBLISHED post
- */
 exports.getPostForUser = async (postId) => {
   const post = await postRepo.findById(postId);
   if (!post || post.stage !== "PUBLISHED") throw new NotFoundError("Post not found");
   return post;
 };
 
-/**
- * Owner: list my posts (all stages)
- * (You can keep this for "My Posts" page if needed)
- */
 exports.getMyPosts = async (userId) => {
   if (!userId) throw new ForbiddenError("Forbidden");
   return postRepo.findByUser(userId);
 };
 
-/**
- * Owner: get one of my posts (any stage)
- */
 exports.getMyPostById = async (postId, userId) => {
   const post = await postRepo.findById(postId);
   ensureOwner(post, userId);
   return post;
 };
 
-/**
- * Owner: Update post content (title/content)
- * Allowed only if stage in UNPUBLISHED | PUBLISHED | HIDDEN
- * Not allowed if BANNED or DELETED
- * Sets lastEditedAt when title/content changes
- */
 exports.updateMyPost = async (postId, userId, data) => {
   const post = await postRepo.findById(postId);
   ensureOwner(post, userId);
@@ -140,100 +109,56 @@ exports.updateMyPost = async (postId, userId, data) => {
     }
   }
 
-  if (!changed) {
-    throw new BadRequestError("No valid fields to update");
-  }
+  if (!changed) throw new BadRequestError("No valid fields to update");
 
-  // for "Last edited: date" UI
   update.lastEditedAt = new Date();
-
   return postRepo.update(postId, update);
 };
 
-/**
- * Owner: Publish
- * UNPUBLISHED -> PUBLISHED
- */
 exports.publish = async (postId, userId) => {
   const post = await postRepo.findById(postId);
   ensureOwner(post, userId);
 
-  if (post.stage !== "UNPUBLISHED") {
-    throw new ConflictError("Invalid stage transition");
-  }
-
+  if (post.stage !== "UNPUBLISHED") throw new ConflictError("Invalid stage transition");
   return postRepo.update(postId, { stage: "PUBLISHED" });
 };
 
-/**
- * Owner: Hide
- * PUBLISHED -> HIDDEN
- */
 exports.hide = async (postId, userId) => {
   const post = await postRepo.findById(postId);
   ensureOwner(post, userId);
 
-  if (post.stage !== "PUBLISHED") {
-    throw new ConflictError("Invalid stage transition");
-  }
-
+  if (post.stage !== "PUBLISHED") throw new ConflictError("Invalid stage transition");
   return postRepo.update(postId, { stage: "HIDDEN" });
 };
 
-/**
- * Owner: Unhide
- * HIDDEN -> PUBLISHED
- */
 exports.unhide = async (postId, userId) => {
   const post = await postRepo.findById(postId);
   ensureOwner(post, userId);
 
-  if (post.stage !== "HIDDEN") {
-    throw new ConflictError("Invalid stage transition");
-  }
-
+  if (post.stage !== "HIDDEN") throw new ConflictError("Invalid stage transition");
   return postRepo.update(postId, { stage: "PUBLISHED" });
 };
 
-/**
- * Owner: Archive (disable replies)
- * Only meaningful for PUBLISHED
- */
 exports.archive = async (postId, userId) => {
   const post = await postRepo.findById(postId);
   ensureOwner(post, userId);
 
-  if (post.stage !== "PUBLISHED") {
-    throw new ConflictError("Only published posts can be archived");
-  }
-
+  if (post.stage !== "PUBLISHED") throw new ConflictError("Only published posts can be archived");
   if (post.isArchived === true) return post;
 
   return postRepo.update(postId, { isArchived: true });
 };
 
-/**
- * Owner: Unarchive (enable replies)
- * Only meaningful for PUBLISHED
- */
 exports.unarchive = async (postId, userId) => {
   const post = await postRepo.findById(postId);
   ensureOwner(post, userId);
 
-  if (post.stage !== "PUBLISHED") {
-    throw new ConflictError("Only published posts can be unarchived");
-  }
-
+  if (post.stage !== "PUBLISHED") throw new ConflictError("Only published posts can be unarchived");
   if (post.isArchived === false) return post;
 
   return postRepo.update(postId, { isArchived: false });
 };
 
-/**
- * Owner: Delete (soft delete)
- * Any stage -> DELETED
- * Owner cannot recover
- */
 exports.deleteMyPost = async (postId, userId) => {
   const post = await postRepo.findById(postId);
   ensureOwner(post, userId);
@@ -246,19 +171,13 @@ exports.deleteMyPost = async (postId, userId) => {
   });
 };
 
-/**
- * Admin: Ban post
- * PUBLISHED -> BANNED
- */
 exports.banPost = async (postId, adminUser, reason) => {
   ensureAdmin(adminUser);
 
   const post = await postRepo.findById(postId);
   if (!post) throw new NotFoundError("Post not found");
 
-  if (post.stage !== "PUBLISHED") {
-    throw new ConflictError("Only published posts can be banned");
-  }
+  if (post.stage !== "PUBLISHED") throw new ConflictError("Only published posts can be banned");
 
   const adminId = toId(adminUser);
 
@@ -271,19 +190,13 @@ exports.banPost = async (postId, adminUser, reason) => {
   });
 };
 
-/**
- * Admin: Unban post
- * BANNED -> PUBLISHED
- */
 exports.unbanPost = async (postId, adminUser) => {
   ensureAdmin(adminUser);
 
   const post = await postRepo.findById(postId);
   if (!post) throw new NotFoundError("Post not found");
 
-  if (post.stage !== "BANNED") {
-    throw new ConflictError("Invalid stage transition");
-  }
+  if (post.stage !== "BANNED") throw new ConflictError("Invalid stage transition");
 
   return postRepo.update(postId, {
     stage: "PUBLISHED",
@@ -293,19 +206,13 @@ exports.unbanPost = async (postId, adminUser) => {
   });
 };
 
-/**
- * Admin: Recover deleted post
- * DELETED -> PUBLISHED
- */
 exports.recoverPost = async (postId, adminUser) => {
   ensureAdmin(adminUser);
 
   const post = await postRepo.findById(postId);
   if (!post) throw new NotFoundError("Post not found");
 
-  if (post.stage !== "DELETED") {
-    throw new ConflictError("Only deleted posts can be recovered");
-  }
+  if (post.stage !== "DELETED") throw new ConflictError("Only deleted posts can be recovered");
 
   return postRepo.update(postId, {
     stage: "PUBLISHED",
@@ -313,5 +220,4 @@ exports.recoverPost = async (postId, adminUser) => {
   });
 };
 
-// Export stages (optional)
 exports.POST_STAGES = STAGES;
