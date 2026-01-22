@@ -42,7 +42,6 @@ router.get("/posts/:postId", auth, requireNotBanned, c.getPost);
    CREATE / UPDATE / DELETE (Owner actions)
    - Logged in
    - Not banned
-   - Email verified OR Admin/SuperAdmin
    ===================== */
 router.post("/posts", auth, requireNotBanned, requireEmailVerified, c.createPost);
 
@@ -52,7 +51,6 @@ router.delete("/posts/:postId", auth, requireNotBanned, requireEmailVerified, c.
 
 /* =====================
    OWNER STATE CHANGES
-   - Email verified OR Admin/SuperAdmin
    - Service should still enforce owner for these actions
    ===================== */
 router.post("/posts/:postId/publish", auth, requireNotBanned, requireEmailVerified, c.publishPost);
