@@ -220,4 +220,17 @@ exports.recoverPost = async (postId, adminUser) => {
   });
 };
 
+exports.getMyTopPosts = async (userId, limit = 3) => {
+  if (!userId) throw new ForbiddenError("Forbidden");
+  const safeLimit = Math.min(Math.max(Number(limit) || 3, 1), 50);
+  return postRepo.findTopByRepliesForUser(userId, safeLimit);
+};
+
+exports.getMyDrafts = async (userId) => {
+  if (!userId) throw new ForbiddenError("Forbidden");
+  return postRepo.findDraftsByUser(userId);
+};
+
+
+
 exports.POST_STAGES = STAGES;

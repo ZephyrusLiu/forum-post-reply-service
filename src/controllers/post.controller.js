@@ -138,3 +138,22 @@ exports.getDeletedPosts = async (req, res) => {
 exports.getDeletedPostById = async (req, res) => {
   res.status(501).json({ message: "Not implemented: getDeletedPostById" });
 };
+
+exports.getMyTopPosts = async (req, res, next) => {
+  try {
+    const limit = Number(req.query.limit) > 0 ? Number(req.query.limit) : 3;
+    const posts = await postService.getMyTopPosts(req.user.id, limit);
+    res.json(posts);
+  } catch (err) {
+    next(err);
+  }
+};
+
+exports.getMyDrafts = async (req, res, next) => {
+  try {
+    const drafts = await postService.getMyDrafts(req.user.id);
+    res.json(drafts);
+  } catch (err) {
+    next(err);
+  }
+};

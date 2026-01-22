@@ -64,25 +64,22 @@ exports.createReply = async (postId, user, comment) => {
   if (!comment || typeof comment !== "string" || comment.trim().length === 0) {
     throw new BadRequestError("Comment is required");
   }
-
-  if (!user || !user.id) {
-    throw new ForbiddenError("Forbidden");
-  }
-
-  // optional safety (middleware should already block banned/unverified)
-  if (user.status === "banned") throw new ForbiddenError("Forbidden");
-  if (user.status !== "active") throw new ForbiddenError("Forbidden");
+  if (!user || !user.id) throw new ForbiddenError("Forbidden");
 
   const post = await postRepo.findById(postId);
   ensureCanCreateReply(post);
 
-  return replyRepo.create({
+  const reply = await replyRepo.create({
     postId,
     userId: user.id,
     comment: comment.trim(),
     isActive: true,
   });
+
+  await postRepo.incrementRepliesCount(postId, 1); // ✅ keep in sync
+  return reply;
 };
+
 
 /**
  * List replies for a post
@@ -123,14 +120,14 @@ exports.updateReply = async (replyId, user, comment) => {
  * - If reply inactive => not found
  */
 exports.deleteReply = async (replyId, user) => {
-  if (!user || !user.id) throw new ForbiddenError("Forbidden");
-  if (user.status === "banned") throw new ForbiddenError("Forbidden");
-  if (user.status !== "active") throw new ForbiddenError("Forbidden");
-
   const reply = await replyRepo.findById(replyId);
   if (!reply || reply.isActive === false) throw new NotFoundError("Reply not found");
 
   await ensureCanDeleteReply(reply, user);
 
-  return replyRepo.update(replyId, { isActive: false, deletedAt: new Date() });
+  const updated = await replyRepo.update(replyId, { isActive: false, deletedAt: new Date() });
+
+  await postRepo.incrementRepliesCount(reply.postId, -1); // ✅ only active -> inactive
+  return updated;
 };
+

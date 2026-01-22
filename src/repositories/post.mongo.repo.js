@@ -12,3 +12,24 @@ exports.findByUser = (userId) =>
 
 exports.update = (id, data) =>
   Post.findByIdAndUpdate(id, data, { new: true });
+
+exports.findTopByRepliesForUser = async (userId, limit) => {
+  return Post.find({ userId, stage: "PUBLISHED" })
+    .sort({ repliesCount: -1, updatedAt: -1 })
+    .limit(limit)
+    .lean();
+};
+
+exports.findDraftsByUser = async (userId) => {
+  return Post.find({ userId, stage: "UNPUBLISHED" })
+    .sort({ updatedAt: -1 })
+    .lean();
+};
+
+exports.incrementRepliesCount = async (postId, delta) => {
+  return Post.findByIdAndUpdate(
+    postId,
+    { $inc: { repliesCount: delta } },
+    { new: true }
+  );
+};
