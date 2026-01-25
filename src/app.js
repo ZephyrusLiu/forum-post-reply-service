@@ -2,7 +2,6 @@ const express = require("express");
 
 const postRoutes = require("./routes/post.routes");
 const replyRoutes = require("./routes/reply.routes");
-const userRoutes = require("./routes/user.routes"); // ✅ user management
 const errorHandler = require("./middleware/error.middleware");
 
 const app = express();
@@ -23,7 +22,6 @@ app.get("/health", (req, res) => {
 // =====================
 app.use("/api", postRoutes);
 app.use("/api", replyRoutes);
-app.use("/api", userRoutes);
 
 // =====================
 // 404 handler

@@ -28,10 +28,16 @@ function isAdmin(user) {
   return type === "admin" || type === "super";
 }
 
+// ✅ string-safe owner check (no .equals)
+function isOwnerId(a, b) {
+  if (!a || !b) return false;
+  return String(a) === String(b);
+}
+
 function ensureReplyOwnerOrAdmin(replyUserId, user) {
   if (!user || !user.id) throw new ForbiddenError("Forbidden");
 
-  const owner = replyUserId && replyUserId.equals(user.id);
+  const owner = isOwnerId(replyUserId, user.id); // ✅ FIX
   if (owner || isAdmin(user)) return;
 
   throw new ForbiddenError("Forbidden");
@@ -41,7 +47,7 @@ async function ensureCanDeleteReply(reply, user) {
   if (!user || !user.id) throw new ForbiddenError("Forbidden");
 
   // reply owner can delete
-  if (reply.userId && reply.userId.equals(user.id)) return;
+  if (isOwnerId(reply.userId, user.id)) return; // ✅ FIX
 
   // admin/super can delete (bonus)
   if (isAdmin(user)) return;
@@ -50,7 +56,8 @@ async function ensureCanDeleteReply(reply, user) {
   const post = await postRepo.findById(reply.postId);
   if (!post) throw new NotFoundError("Post not found");
 
-  if (post.userId && post.userId.equals(user.id)) return;
+  // post.userId might be ObjectId or string depending on your Post model/repo
+  if (isOwnerId(post.userId, user.id)) return; // ✅ FIX
 
   throw new ForbiddenError("Forbidden");
 }
@@ -59,38 +66,49 @@ async function ensureCanDeleteReply(reply, user) {
  * Create reply
  * - Auth handled by middleware
  * - Allowed only if post is PUBLISHED and not archived
+ *
+ * NOTE: userId in Reply model is STRING now.
  */
-exports.createReply = async (postId, user, comment) => {
-  if (!comment || typeof comment !== "string" || comment.trim().length === 0) {
-    throw new BadRequestError("Comment is required");
+exports.createReply = async (postId, userId, comment, parentReplyId = null) => {
+  // ✅ force string
+  userId = String(userId);
+
+  // (optional but recommended) validate parent if provided
+  if (parentReplyId) {
+    const parent = await replyRepo.findById(parentReplyId);
+    if (!parent) throw new NotFoundError("Parent reply not found");
+    if (String(parent.postId) !== String(postId)) {
+      throw new BadRequestError("Parent reply does not belong to this post");
+    }
   }
-  if (!user || !user.id) throw new ForbiddenError("Forbidden");
 
-  const post = await postRepo.findById(postId);
-  ensureCanCreateReply(post);
-
-  const reply = await replyRepo.create({
+  return replyRepo.create({
     postId,
-    userId: user.id,
-    comment: comment.trim(),
+    userId,                         // ✅ string "7"
+    comment,
+    parentReplyId: parentReplyId || null,  // ✅ persist this
     isActive: true,
   });
-
-  await postRepo.incrementRepliesCount(postId, 1); // ✅ keep in sync
-  return reply;
 };
-
 
 /**
  * List replies for a post
  * - Only if post is PUBLISHED
  */
-exports.getReplies = async (postId) => {
+exports.getReplies = async (postId, user) => {
   const post = await postRepo.findById(postId);
-  ensureCanViewReplies(post);
+  if (!post) throw new NotFoundError("Post not found");
+
+  const isAdmin = user?.type === "admin" || user?.type === "super";
+
+  // 🔑 single rule
+  if (post.stage !== "PUBLISHED" && !isAdmin) {
+    throw new NotFoundError("Post not found");
+  }
 
   return replyRepo.findByPost(postId);
 };
+
 
 /**
  * Update reply
@@ -107,9 +125,11 @@ exports.updateReply = async (replyId, user, comment) => {
   if (user.status !== "active") throw new ForbiddenError("Forbidden");
 
   const reply = await replyRepo.findById(replyId);
-  if (!reply || reply.isActive === false) throw new NotFoundError("Reply not found");
+  if (!reply || reply.isActive === false) {
+    throw new NotFoundError("Reply not found");
+  }
 
-  ensureReplyOwnerOrAdmin(reply.userId, user);
+  ensureReplyOwnerOrAdmin(reply.userId, user); // ✅ now string-safe
 
   return replyRepo.update(replyId, { comment: comment.trim() });
 };
@@ -125,9 +145,11 @@ exports.deleteReply = async (replyId, user) => {
 
   await ensureCanDeleteReply(reply, user);
 
-  const updated = await replyRepo.update(replyId, { isActive: false, deletedAt: new Date() });
+  const updated = await replyRepo.update(replyId, {
+    isActive: false,
+    deletedAt: new Date(),
+  });
 
   await postRepo.incrementRepliesCount(reply.postId, -1); // ✅ only active -> inactive
   return updated;
 };
-

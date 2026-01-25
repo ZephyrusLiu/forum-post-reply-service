@@ -35,8 +35,11 @@ const c = require("../controllers/post.controller");
    - Not banned
    - Email verification NOT required
    ===================== */
+router.get("/posts/me", auth, requireNotBanned, c.getMyPosts);
+router.get('/posts/me/:postId', auth, requireNotBanned, c.getMyPostById);
 router.get("/posts", auth, requireNotBanned, c.getPosts);
 router.get("/posts/:postId", auth, requireNotBanned, c.getPost);
+
 
 // Top posts by replies (current user)
 router.get("/me/posts/top", auth, requireNotBanned, c.getMyTopPosts);
@@ -44,12 +47,23 @@ router.get("/me/posts/top", auth, requireNotBanned, c.getMyTopPosts);
 // Drafts (current user)
 router.get("/me/posts/drafts", auth, requireNotBanned, c.getMyDrafts);
 
+
 /* =====================
    CREATE / UPDATE / DELETE (Owner actions)
    - Logged in
    - Not banned
    ===================== */
 router.post("/posts", auth, requireNotBanned, requireEmailVerified, c.createPost);
+// routes/post.routes.js
+
+router.post(
+  "/posts/publish",
+  auth,
+  requireNotBanned,
+  requireEmailVerified,
+  c.createAndPublishPost
+);
+
 
 router.patch("/posts/:postId", auth, requireNotBanned, requireEmailVerified, c.updatePost);
 
@@ -78,5 +92,14 @@ router.get("/admin/posts/deleted", auth, requireNotBanned, admin, c.getDeletedPo
 router.get("/admin/posts/:postId/deleted", auth, requireNotBanned, admin, c.getDeletedPostById);
 
 router.post("/admin/posts/:postId/recover", auth, requireNotBanned, admin, c.recoverPost);
+router.get(
+  "/admin/posts/banned",
+  auth,
+  requireNotBanned,
+  admin,
+  c.getBannedPosts
+);
+router.get("/admin/posts/:postId", auth, requireNotBanned, admin, c.getAnyPostById);
+
 
 module.exports = router;

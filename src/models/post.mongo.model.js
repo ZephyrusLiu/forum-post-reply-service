@@ -1,31 +1,22 @@
 const mongoose = require("mongoose");
 
-const POST_STAGES = [
-  "UNPUBLISHED",
-  "PUBLISHED",
-  "HIDDEN",
-  "BANNED",
-  "DELETED",
-];
+const POST_STAGES = ["UNPUBLISHED", "PUBLISHED", "HIDDEN", "BANNED", "DELETED"];
 
 const postSchema = new mongoose.Schema(
   {
-    userId: { type: mongoose.Schema.Types.ObjectId, required: true, index: true },
+    // ✅ store user-service id ("7") not ObjectId
+    userId: { type: String, required: true, index: true },
 
     title: { type: String, required: true, trim: true },
     content: { type: String, required: true },
 
-    stage: {
-      type: String,
-      enum: POST_STAGES,
-      default: "UNPUBLISHED",
-      index: true,
-    },
+    stage: { type: String, enum: POST_STAGES, default: "UNPUBLISHED", index: true },
 
     isArchived: { type: Boolean, default: false },
 
+    // ✅ also change these to String if they refer to users
     bannedAt: Date,
-    bannedBy: mongoose.Schema.Types.ObjectId,
+    bannedBy: { type: String },     // was ObjectId
     banReason: String,
 
     repliesCount: { type: Number, default: 0 },
