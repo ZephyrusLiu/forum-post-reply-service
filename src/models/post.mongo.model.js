@@ -4,7 +4,7 @@ const POST_STAGES = ["UNPUBLISHED", "PUBLISHED", "HIDDEN", "BANNED", "DELETED"];
 
 const postSchema = new mongoose.Schema(
   {
-    // ✅ store user-service id ("7") not ObjectId
+    // store user-service id ("7") not ObjectId
     userId: { type: String, required: true, index: true },
 
     title: { type: String, required: true, trim: true },
@@ -14,9 +14,13 @@ const postSchema = new mongoose.Schema(
 
     isArchived: { type: Boolean, default: false },
 
-    // ✅ also change these to String if they refer to users
+    // ✅ NEW: store uploaded file keys (S3 key), not signed URLs
+    // Example: ["posts/7/post-<postId>/<uuid>.jpeg"]
+    attachments: { type: [String], default: [] },
+
+    // also change these to String if they refer to users
     bannedAt: Date,
-    bannedBy: { type: String },     // was ObjectId
+    bannedBy: { type: String },
     banReason: String,
 
     repliesCount: { type: Number, default: 0 },
