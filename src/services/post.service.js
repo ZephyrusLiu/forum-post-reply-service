@@ -41,6 +41,14 @@ function toId(user) {
   return user?.id;
 }
 
+function normalizeAttachments(val) {
+  // attachments should store S3 KEYS (strings), not signed URLs
+  if (!Array.isArray(val)) return undefined;
+  return val
+    .map((x) => (x == null ? "" : String(x).trim()))
+    .filter(Boolean);
+}
+
 /* =========================
    CREATE / READ
 ========================= */
@@ -57,7 +65,17 @@ exports.createDraft = async (userId, data) => {
   if (!title) throw new BadRequestError("title is required");
   if (!content) throw new BadRequestError("content is required");
 
-  return postRepo.create({ userId, title, content });
+  const attachments = normalizeAttachments(data.attachments);
+
+  return postRepo.create({
+    userId,
+    title,
+    content,
+    // keep as draft
+    stage: "UNPUBLISHED",
+    isArchived: false,
+    ...(attachments ? { attachments } : {}),
+  });
 };
 
 exports.createAndPublish = async (userId, data) => {
@@ -147,6 +165,21 @@ exports.updateMyPost = async (postId, userId, data) => {
     }
   }
 
+  // ✅ NEW: allow updating attachments (S3 keys)
+  if (data && Object.prototype.hasOwnProperty.call(data, "attachments")) {
+    const next = normalizeAttachments(data.attachments) || [];
+    const prev = Array.isArray(post.attachments)
+      ? post.attachments.map((x) => String(x))
+      : [];
+    const same =
+      prev.length === next.length && prev.every((v, i) => v === next[i]);
+
+    if (!same) {
+      update.attachments = next;
+      changed = true;
+    }
+  }
+
   if (!changed) throw new BadRequestError("No valid fields to update");
 
   update.lastEditedAt = new Date();
@@ -168,7 +201,7 @@ exports.publish = async (postId, userId) => {
   return postRepo.update(postId, { stage: "PUBLISHED" });
 };
 
-exports.hide = async (postId, userId) => {
+exports.hidePost = async (postId, userId) => {
   const post = await postRepo.findById(postId);
   ensureOwner(post, userId);
 
@@ -179,7 +212,7 @@ exports.hide = async (postId, userId) => {
   return postRepo.update(postId, { stage: "HIDDEN" });
 };
 
-exports.unhide = async (postId, userId) => {
+exports.unhidePost = async (postId, userId) => {
   const post = await postRepo.findById(postId);
   ensureOwner(post, userId);
 
@@ -222,7 +255,7 @@ exports.banPost = async (postId, adminUser, reason) => {
     stage: "BANNED",
     bannedAt: new Date(),
     bannedBy: adminId || null,
-    banReason: typeof reason === "string" ? reason : null
+    banReason: typeof reason === "string" ? reason : null,
   });
 };
 
@@ -289,14 +322,11 @@ exports.getDeletedPostById = async (postId) => {
   return post;
 };
 
-// services/post.service.js
 exports.getAnyPostById = async (postId) => {
   const post = await postRepo.findById(postId);
   if (!post) throw new NotFoundError("Post not found");
   return post;
 };
-
-
 
 /* =========================
    ARCHIVE / UNARCHIVE (OWNER ONLY)
@@ -310,7 +340,7 @@ exports.archive = async (postId, userId) => {
     throw new ConflictError("Post already archived");
   }
 
-  // archive only published (your rule)
+  // archive only published
   if (post.stage !== "PUBLISHED") {
     throw new ConflictError("Only published posts can be archived");
   }
