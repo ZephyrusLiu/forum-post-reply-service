@@ -1,10 +1,27 @@
 // src/controllers/post.controller.js
 const postService = require("../services/post.service");
 
+function getUserServiceId(req) {
+  const id = req.user?.userId ?? req.user?.id ?? req.user?.sub;
+  return id == null ? null : String(id);
+}
+
+function requireUser(req, res) {
+  const userId = getUserServiceId(req);
+  if (!userId) {
+    res.status(401).json({ error: "UNAUTHORIZED", message: "Unauthorized" });
+    return null;
+  }
+  return userId;
+}
+
 // Create draft
 exports.createPost = async (req, res, next) => {
   try {
-    const post = await postService.createDraft(req.user.id, req.body);
+    const userId = requireUser(req, res);
+    if (!userId) return;
+
+    const post = await postService.createDraft(userId, req.body);
     res.status(201).json(post);
   } catch (err) {
     next(err);
@@ -34,9 +51,12 @@ exports.getPost = async (req, res, next) => {
 // Owner update title/content
 exports.updatePost = async (req, res, next) => {
   try {
+    const userId = requireUser(req, res);
+    if (!userId) return;
+
     const updated = await postService.updateMyPost(
       req.params.postId,
-      req.user.id,
+      userId,
       req.body
     );
     res.json(updated);
@@ -48,7 +68,10 @@ exports.updatePost = async (req, res, next) => {
 // Owner soft delete
 exports.deletePost = async (req, res, next) => {
   try {
-    const deleted = await postService.deleteMyPost(req.params.postId, req.user.id);
+    const userId = requireUser(req, res);
+    if (!userId) return;
+
+    const deleted = await postService.deleteMyPost(req.params.postId, userId);
     res.json(deleted);
   } catch (err) {
     next(err);
@@ -58,7 +81,10 @@ exports.deletePost = async (req, res, next) => {
 // Owner state changes
 exports.publishPost = async (req, res, next) => {
   try {
-    const post = await postService.publish(req.params.postId, req.user.id);
+    const userId = requireUser(req, res);
+    if (!userId) return;
+
+    const post = await postService.publish(req.params.postId, userId);
     res.json(post);
   } catch (err) {
     next(err);
@@ -67,7 +93,10 @@ exports.publishPost = async (req, res, next) => {
 
 exports.hidePost = async (req, res, next) => {
   try {
-    const post = await postService.hide(req.params.postId, req.user.id);
+    const userId = requireUser(req, res);
+    if (!userId) return;
+
+    const post = await postService.hide(req.params.postId, userId);
     res.json(post);
   } catch (err) {
     next(err);
@@ -76,7 +105,10 @@ exports.hidePost = async (req, res, next) => {
 
 exports.unhidePost = async (req, res, next) => {
   try {
-    const post = await postService.unhide(req.params.postId, req.user.id);
+    const userId = requireUser(req, res);
+    if (!userId) return;
+
+    const post = await postService.unhide(req.params.postId, userId);
     res.json(post);
   } catch (err) {
     next(err);
@@ -85,7 +117,10 @@ exports.unhidePost = async (req, res, next) => {
 
 exports.archivePost = async (req, res, next) => {
   try {
-    const post = await postService.archive(req.params.postId, req.user.id);
+    const userId = requireUser(req, res);
+    if (!userId) return;
+
+    const post = await postService.archive(req.params.postId, userId);
     res.json(post);
   } catch (err) {
     next(err);
@@ -94,7 +129,10 @@ exports.archivePost = async (req, res, next) => {
 
 exports.unarchivePost = async (req, res, next) => {
   try {
-    const post = await postService.unarchive(req.params.postId, req.user.id);
+    const userId = requireUser(req, res);
+    if (!userId) return;
+
+    const post = await postService.unarchive(req.params.postId, userId);
     res.json(post);
   } catch (err) {
     next(err);
@@ -130,19 +168,42 @@ exports.recoverPost = async (req, res, next) => {
   }
 };
 
-// Not implemented yet (you don't have repo/service functions for these)
-exports.getDeletedPosts = async (req, res) => {
-  res.status(501).json({ message: "Not implemented: getDeletedPosts" });
+// ✅ ADMIN: list banned posts
+exports.getBannedPosts = async (req, res, next) => {
+  try {
+    const posts = await postService.getBannedPosts();
+    res.json(posts);
+  } catch (err) {
+    next(err);
+  }
 };
 
-exports.getDeletedPostById = async (req, res) => {
-  res.status(501).json({ message: "Not implemented: getDeletedPostById" });
+exports.getDeletedPosts = async (req, res, next) => {
+  try {
+    const posts = await postService.getDeletedPosts();
+    res.json(posts);
+  } catch (err) {
+    next(err);
+  }
 };
+
+exports.getDeletedPostById = async (req, res, next) => {
+  try {
+    const post = await postService.getDeletedPostById(req.params.postId);
+    res.json(post);
+  } catch (err) {
+    next(err);
+  }
+};
+
 
 exports.getMyTopPosts = async (req, res, next) => {
   try {
+    const userId = requireUser(req, res);
+    if (!userId) return;
+
     const limit = Number(req.query.limit) > 0 ? Number(req.query.limit) : 3;
-    const posts = await postService.getMyTopPosts(req.user.id, limit);
+    const posts = await postService.getMyTopPosts(userId, limit);
     res.json(posts);
   } catch (err) {
     next(err);
@@ -151,8 +212,57 @@ exports.getMyTopPosts = async (req, res, next) => {
 
 exports.getMyDrafts = async (req, res, next) => {
   try {
-    const drafts = await postService.getMyDrafts(req.user.id);
+    const userId = requireUser(req, res);
+    if (!userId) return;
+
+    const drafts = await postService.getMyDrafts(userId);
     res.json(drafts);
+  } catch (err) {
+    next(err);
+  }
+};
+
+exports.getMyPostById = async (req, res, next) => {
+  try {
+    const userId = requireUser(req, res);
+    if (!userId) return;
+
+    const post = await postService.getMyPostById(req.params.postId, userId);
+    res.json(post);
+  } catch (err) {
+    next(err);
+  }
+};
+
+// ✅ Create & Publish (wrapped in try/catch + uses requireUser)
+exports.createAndPublishPost = async (req, res, next) => {
+  try {
+    const userId = requireUser(req, res);
+    if (!userId) return;
+
+    const post = await postService.createAndPublish(userId, req.body);
+    res.status(201).json(post);
+  } catch (err) {
+    next(err);
+  }
+};
+
+exports.getAnyPostById = async (req, res, next) => {
+  try {
+    const post = await postService.getAnyPostById(req.params.postId);
+    res.json(post);
+  } catch (err) {
+    next(err);
+  }
+};
+
+exports.getMyPosts = async (req, res, next) => {
+  try {
+    const userId = requireUser(req, res);
+    if (!userId) return;
+
+    const posts = await postService.getMyPosts(userId);
+    res.json(posts);
   } catch (err) {
     next(err);
   }
