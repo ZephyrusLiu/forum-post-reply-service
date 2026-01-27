@@ -37,7 +37,7 @@ function isOwnerId(a, b) {
 function ensureReplyOwnerOrAdmin(replyUserId, user) {
   if (!user || !user.id) throw new ForbiddenError("Forbidden");
 
-  const owner = isOwnerId(replyUserId, user.id); // ✅ FIX
+  const owner = isOwnerId(replyUserId, user.id);
   if (owner || isAdmin(user)) return;
 
   throw new ForbiddenError("Forbidden");
@@ -47,68 +47,80 @@ async function ensureCanDeleteReply(reply, user) {
   if (!user || !user.id) throw new ForbiddenError("Forbidden");
 
   // reply owner can delete
-  if (isOwnerId(reply.userId, user.id)) return; // ✅ FIX
+  if (isOwnerId(reply.userId, user.id)) return;
 
-  // admin/super can delete (bonus)
+  // admin/super can delete
   if (isAdmin(user)) return;
 
   // post owner can delete others' replies (bonus)
   const post = await postRepo.findById(reply.postId);
   if (!post) throw new NotFoundError("Post not found");
 
-  // post.userId might be ObjectId or string depending on your Post model/repo
-  if (isOwnerId(post.userId, user.id)) return; // ✅ FIX
+  if (isOwnerId(post.userId, user.id)) return;
 
   throw new ForbiddenError("Forbidden");
 }
 
 /**
  * Create reply
- * - Auth handled by middleware
  * - Allowed only if post is PUBLISHED and not archived
- *
  * NOTE: userId in Reply model is STRING now.
  */
 exports.createReply = async (postId, userId, comment, parentReplyId = null) => {
+  // ✅ validate
+  if (!comment || typeof comment !== "string" || comment.trim().length === 0) {
+    throw new BadRequestError("Comment is required");
+  }
+
   // ✅ force string
   userId = String(userId);
 
-  // (optional but recommended) validate parent if provided
+  // ✅ ensure post exists + can reply
+  const post = await postRepo.findById(postId);
+  if (!post) throw new NotFoundError("Post not found");
+  ensureCanCreateReply(post);
+
+  // validate parent if provided
   if (parentReplyId) {
     const parent = await replyRepo.findById(parentReplyId);
-    if (!parent) throw new NotFoundError("Parent reply not found");
+    if (!parent || parent.isActive === false) throw new NotFoundError("Parent reply not found");
     if (String(parent.postId) !== String(postId)) {
       throw new BadRequestError("Parent reply does not belong to this post");
     }
   }
 
-  return replyRepo.create({
+  // ✅ create reply first
+  const created = await replyRepo.create({
     postId,
-    userId,                         // ✅ string "7"
-    comment,
-    parentReplyId: parentReplyId || null,  // ✅ persist this
+    userId,
+    comment: comment.trim(),
+    parentReplyId: parentReplyId || null,
     isActive: true,
   });
+
+  // ✅ IMPORTANT: update repliesCount in Post
+  // increment by +1 for every created reply (nested or not)
+  await postRepo.incrementRepliesCount(postId, +1);
+
+  return created;
 };
 
 /**
  * List replies for a post
- * - Only if post is PUBLISHED
+ * - Only if post is PUBLISHED (unless admin)
  */
 exports.getReplies = async (postId, user) => {
   const post = await postRepo.findById(postId);
   if (!post) throw new NotFoundError("Post not found");
 
-  const isAdmin = user?.type === "admin" || user?.type === "super";
+  const admin = user?.type === "admin" || user?.type === "super";
 
-  // 🔑 single rule
-  if (post.stage !== "PUBLISHED" && !isAdmin) {
+  if (post.stage !== "PUBLISHED" && !admin) {
     throw new NotFoundError("Post not found");
   }
 
   return replyRepo.findByPost(postId);
 };
-
 
 /**
  * Update reply
@@ -129,7 +141,7 @@ exports.updateReply = async (replyId, user, comment) => {
     throw new NotFoundError("Reply not found");
   }
 
-  ensureReplyOwnerOrAdmin(reply.userId, user); // ✅ now string-safe
+  ensureReplyOwnerOrAdmin(reply.userId, user);
 
   return replyRepo.update(replyId, { comment: comment.trim() });
 };
@@ -150,6 +162,9 @@ exports.deleteReply = async (replyId, user) => {
     deletedAt: new Date(),
   });
 
-  await postRepo.incrementRepliesCount(reply.postId, -1); // ✅ only active -> inactive
+  // ✅ IMPORTANT: prevent repliesCount going negative
+  // Make your repo method clamp at 0 (best), but we also guard here.
+  await postRepo.incrementRepliesCount(reply.postId, -1);
+
   return updated;
 };

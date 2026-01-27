@@ -63,13 +63,29 @@ exports.update = (id, data) => Post.findByIdAndUpdate(id, data, { new: true });
    REPLIES COUNT
    ===================== */
 
+// src/repositories/post.mongo.repo.js
+
 exports.incrementRepliesCount = async (postId, delta) => {
-  return Post.findByIdAndUpdate(
-    postId,
-    { $inc: { repliesCount: delta } },
+  const d = Number(delta);
+  if (!Number.isFinite(d) || d === 0) return;
+
+  // ✅ increment always allowed
+  if (d > 0) {
+    return Post.findByIdAndUpdate(
+      postId,
+      { $inc: { repliesCount: d } },
+      { new: true }
+    );
+  }
+
+  // ✅ decrement ONLY if repliesCount > 0
+  return Post.findOneAndUpdate(
+    { _id: postId, repliesCount: { $gt: 0 } },
+    { $inc: { repliesCount: d } }, // d is negative
     { new: true }
   );
 };
+
 
 /* =====================
    ARCHIVE / UNARCHIVE (OWNER ONLY)
